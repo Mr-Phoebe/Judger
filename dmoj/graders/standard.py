@@ -155,7 +155,7 @@ class StandardGrader(BaseGrader):
         try:
             # Fetch an appropriate executor for the language
             binary = executors[self.language].Executor(self.problem.id, self.source,
-                                                       hints=self.problem.config.hints or [])
+                                                       hints=self.problem.config or [])
         except CompileError as compilation_error:
             error = compilation_error.args[0]
             error = error.decode('mbcs') if os.name == 'nt' and isinstance(error, str) else error

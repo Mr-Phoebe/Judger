@@ -10,40 +10,31 @@ from yaml.scanner import ScannerError
 from dmoj import checkers
 from dmoj.config import InvalidInitException, ConfigNode
 from dmoj.generator import GeneratorManager
-from dmoj.judgeenv import get_problem_root
+from dmoj.judgeenv import get_problem_root, env
 from dmoj.utils.module import load_module_from_file
+import requests
 
 
 class Problem(object):
-    def __init__(self, problem_id, time_limit, memory_limit, load_pretests_only=False):
+    def __init__(self, problem_id, time_limit, memory_limit, problem_data):
         self.id = problem_id
         self.time_limit = time_limit
         self.memory_limit = memory_limit
         self.generator_manager = GeneratorManager()
 
-        self.problem_data = ProblemDataManager(problem_id)
+        self.problem_data = ProblemDataManager(problem_id, problem_data)
 
         # Checkers modules must be stored in a dict, for the duration of execution,
         # lest globals be deleted with the module.
         self._checkers = {}
         self._testcase_counter = 0
         self._batch_counter = 0
+        self.config = None
 
-        try:
-            doc = yaml.safe_load(self.problem_data['init.yml'])
-            if not doc:
-                raise InvalidInitException('I find your lack of content disturbing.')
-            self.config = ConfigNode(doc, defaults={
-                'output_prefix_length': 64,
-                'output_limit_length': 25165824,
-            })
-        except (IOError, ParserError, ScannerError) as e:
-            raise InvalidInitException(str(e))
+        # self.problem_data.archive = self._resolve_archive_files()
 
-        self.problem_data.archive = self._resolve_archive_files()
-
-        self.is_pretested = load_pretests_only and 'pretest_test_cases' in self.config
-        self.cases = self._resolve_testcases(self.config['pretest_test_cases' if self.is_pretested else 'test_cases'])
+        # self.is_pretested = load_pretests_only and 'pretest_test_cases' in self.config
+        # self.cases = self._resolve_testcases(self.config['pretest_test_cases' if self.is_pretested else 'test_cases'])
 
     def load_checker(self, name):
         if name in self._checkers:
@@ -76,18 +67,46 @@ class Problem(object):
 
 
 class ProblemDataManager(dict):
-    def __init__(self, problem_id, **kwargs):
+
+    def __init__(self, problem_id, problem_data, **kwargs):
         super(ProblemDataManager, self).__init__(**kwargs)
         self.problem_id = problem_id
         self.archive = None
+        self.data = {}
+
+        print problem_data
+        try:
+            for f in problem_data:
+                i = f['in']
+                o = f['out']
+                p_dir = get_problem_root(self.problem_id)
+                self._get_file(p_dir, i)
+                self._get_file(p_dir, o)
+
+        except Exception as ex:
+            print "error", ex
+            
+
+    def _get_file(self, p_dir, f):
+        key = os.path.join(p_dir, f['filename'])
+        if os.path.exists(key): 
+            with open(key, 'rb') as fp:
+                self.data[key] = fp.read()
+        else:
+            url = env['server_url'] + f['path']
+            print 'url: ', url
+            content = requests.get(url).content
+            with open(key, 'wb') as fp:
+                fp.write(content)
+            self.data[key] = content
+
 
     def __missing__(self, key):
         try:
-            return open(os.path.join(get_problem_root(self.problem_id), key), 'r').read()
+            local_path = os.path.join(get_problem_root(self.problem_id), key)
+            return self.data[local_path]
+            # return open(), 'r').read()
         except IOError:
-            if self.archive:
-                zipinfo = self.archive.getinfo(key)
-                return self.archive.open(zipinfo).read()
             raise KeyError('file "%s" could not be found' % key)
 
     def __del__(self):

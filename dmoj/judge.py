@@ -6,6 +6,7 @@ import signal
 import sys
 import threading
 import traceback
+from multiprocessing import Process
 from functools import partial
 from itertools import chain
 
@@ -14,11 +15,14 @@ from dmoj.config import ConfigNode
 from dmoj.control import JudgeControlRequestHandler
 from dmoj.error import CompileError
 from dmoj.judgeenv import env, get_supported_problems, startup_warnings
-from dmoj.monitor import Monitor, DummyMonitor
+# from dmoj.monitor import Monitor, DummyMonitor
 from dmoj.problem import Problem, BatchedTestCase
 from dmoj.result import Result
 from dmoj.utils.ansi import ansi_style, strip_ansi
 from dmoj.utils.debugger import setup_all_debuggers
+from dmoj.executors import executors
+import nsq
+import json
 
 setup_all_debuggers()
 
@@ -52,9 +56,12 @@ class Judge(object):
         self.current_submission_thread = None
         self._terminate_grading = False
         self.process_type = 0
+        self.packet_manager = packet.PacketManager(env['server_url'], env['key'])
+        self.url = env['nsq_url']
+        self.key = env['judge_key']
 
-        self.begin_grading = partial(self.process_submission, TYPE_SUBMISSION, self._begin_grading)
-        self.custom_invocation = partial(self.process_submission, TYPE_INVOCATION, self._custom_invocation)
+        # self.begin_grading = partial(self.process_submission, TYPE_SUBMISSION, self._begin_grading)
+        # self.custom_invocation = partial(self.process_submission, TYPE_INVOCATION, self._custom_invocation)
 
     def update_problems(self):
         """
@@ -111,30 +118,34 @@ class Judge(object):
         self.current_submission_thread = None
         self.current_submission = None
 
-    def _begin_grading(self, problem_id, language, source, time_limit, memory_limit, short_circuit, pretests_only):
+    def begin_grading(self, problem_id, language, source, time_limit, memory_limit,
+            problem_data):
         submission_id = self.current_submission
         print ansi_style('Start grading #ansi[%s](yellow)/#ansi[%s](green|bold) in %s...'
                          % (problem_id, submission_id, language))
 
         try:
-            problem = Problem(problem_id, time_limit, memory_limit, load_pretests_only=pretests_only)
+            problem = Problem(problem_id, time_limit, memory_limit, problem_data)
+            print "end problem"
         except Exception:
             return self.internal_error()
 
-        if 'signature_grader' in problem.config:
-            grader_class = graders.SignatureGrader
-        elif 'custom_judge' in problem.config:
-            grader_class = graders.CustomGrader
-        else:
-            grader_class = graders.StandardGrader
+        # grader_class = graders.StandardGrader
 
-        grader = self.get_grader_from_source(grader_class, problem, language, source)
-        binary = grader.binary if grader else None
+        # grader = self.get_grader_from_source(grader_class, problem, language, source)
+        # binary = grader.binary if grader else None
 
         # the compiler may have failed, or an error could have happened while initializing a custom judge
         # either way, we can't continue
+        print "before process"
+        try:
+            process = self.get_process_from_source(problem, language, source) 
+            print process.__dict__
+        except Exception as ex:
+            print "error :", ex
+        return
         if binary:
-            self.packet_manager.begin_grading_packet(problem.is_pretested)
+            self.packet_manager.begin_grading_packet(problem.is_pretested, submission_id)
 
             batch_counter = 1
             in_batch = False
@@ -144,11 +155,11 @@ class Judge(object):
             try:
                 for result in self.grade_cases(grader, problem.cases, short_circuit=short_circuit):
                     if isinstance(result, BatchBegin):
-                        self.packet_manager.batch_begin_packet()
+                        self.packet_manager.batch_begin_packet(submission_id)
                         print ansi_style("#ansi[Batch #%d](yellow|bold)" % batch_counter)
                         in_batch = True
                     elif isinstance(result, BatchEnd):
-                        self.packet_manager.batch_end_packet()
+                        self.packet_manager.batch_end_packet(submission_id)
                         batch_counter += 1
                         in_batch = False
                     else:
@@ -180,7 +191,6 @@ class Judge(object):
                 self.packet_manager.grading_end_packet()
 
         print ansi_style('Done grading #ansi[%s](yellow)/#ansi[%s](green|bold).' % (problem_id, submission_id))
-        print
         self._terminate_grading = False
         self.current_submission_thread = None
         self.current_submission = None
@@ -237,6 +247,18 @@ class Judge(object):
 
         return grader
 
+    def get_process_from_source(self, problem, language, source):
+        print "start get executor"
+        if isinstance(source, unicode):
+            source = source.encode('utf-8')
+        print executors.keys()
+
+        executor = executors[language].Executor('validator', source)
+        print "got executor"
+        return executor.launch(time=problem.time_limit, memory=problem.memory_limit)
+
+       
+
     def get_process_type(self):
         return {0: None,
                 TYPE_SUBMISSION: 'submission',
@@ -275,11 +297,46 @@ class Judge(object):
             self.current_submission_thread.join()
             self.current_submission_thread = None
 
+    def start_judge(self, message):
+
+        #try:
+        params = json.loads(message.body)
+        print params
+        self.current_submission = int(params['submission_id'])
+        print "before start"
+        problem_id = int(params['problem_id'])
+        print problem_id
+        language = params['language']
+        print language
+        source = params['source']
+        print source
+        time_limit = int(params['time_limit'])
+        print time_limit
+        memory_limit = int(params['memory_limit'])
+        print memory_limit
+        problem_data = params['problem_data']
+        print problem_data
+        pretests_only=False
+        self.begin_grading(problem_id, language, source, time_limit, \
+                memory_limit, problem_data)
+        #except Exception as ex:
+        #    print "error: ", ex
+
+        return True
+
+
+
+
     def listen(self):
         """
         Attempts to connect to the handler server specified in command line.
         """
-        self.packet_manager.run()
+        nsq.Reader(message_handler=self.start_judge, 
+            nsqd_tcp_addresses=[self.url],
+            topic='judge', channel=self.key, 
+            lookupd_poll_interval=15)
+        nsq.run()
+
 
     def __del__(self):
         del self.packet_manager
@@ -298,8 +355,7 @@ class Judge(object):
 
 
 class ClassicJudge(Judge):
-    def __init__(self, host, port):
-        self.packet_manager = packet.PacketManager(host, port, self, env['id'], env['key'])
+    def __init__(self, url):
         super(ClassicJudge, self).__init__()
 
 
@@ -337,8 +393,8 @@ def sanity_check():
         startup_warnings.append('native checker module not found, compile _checker for optimal performance')
     return True
 
-
-def judge_proc(need_monitor):
+def judge_proc():
+    global g_judge
     from dmoj import judgeenv
 
     logfile = judgeenv.log_file
@@ -351,229 +407,18 @@ def judge_proc(need_monitor):
     logging.basicConfig(filename=logfile, level=logging.INFO,
                         format='%(levelname)s %(asctime)s %(module)s %(message)s')
 
-    judge = ClassicJudge(judgeenv.server_host, judgeenv.server_port)
-    if need_monitor:
-        monitor = Monitor()
-        monitor.callback = judge.update_problems
-    else:
-        monitor = DummyMonitor()
+    g_judge = Judge()
+    g_judge.listen()
 
     if hasattr(signal, 'SIGUSR2'):
         def update_problem_signal(signum, frame):
-            judge.update_problems()
+            g_judge.update_problems()
 
         signal.signal(signal.SIGUSR2, update_problem_signal)
 
-    if need_monitor and judgeenv.api_listen:
-        from BaseHTTPServer import HTTPServer
-        judge_instance = judge
 
-        class Handler(JudgeControlRequestHandler):
-            judge = judge_instance
-
-        api_server = HTTPServer(judgeenv.api_listen, Handler)
-        thread = threading.Thread(target=api_server.serve_forever)
-        thread.daemon = True
-        thread.start()
-    else:
-        api_server = None
-
-    print
-    with monitor, judge:
-        try:
-            judge.listen()
-        except KeyboardInterrupt:
-            pass
-        except:
-            traceback.print_exc()
-        finally:
-            judge.murder()
-            if api_server:
-                api_server.shutdown()
 
 PR_SET_PDEATHSIG = 1
-
-
-class JudgeManager(object):
-    signal_map = {k: v for v, k in sorted(signal.__dict__.items(), reverse=True)
-                  if v.startswith('SIG') and not v.startswith('SIG_')}
-
-    def __init__(self, judges):
-        self.libc = self.__get_libc()
-        self.prctl = self.libc.prctl
-
-        self._try_respawn = True
-        self.auth = {entry.id: entry.key for entry in judges}
-        self.orig_signal = {}
-
-        self.master_pid = os.getpid()
-        self.pids = {}
-        self.monitor_pid = None
-        self.api_pid = None
-
-        self.monitor = Monitor()
-        self.monitor.callback = lambda: os.kill(self.master_pid, signal.SIGUSR2)
-
-    def __get_libc(self):
-        from ctypes.util import find_library
-        from ctypes import CDLL
-        return CDLL(find_library('c'))
-
-    def _forward_signal(self, sig, respawn=False):
-        def handler(signum, frame):
-            print>>sys.stderr, 'judgepm: Received signal (%s), forwarding...' % self.signal_map.get(signum, signum)
-            if not respawn:
-                print>>sys.stderr, 'judgepm: Will no longer respawn judges.'
-                self._try_respawn = False
-            self.signal_all(signum)
-        self.orig_signal[sig] = signal.signal(sig, handler)
-
-    def _spawn_child(self, func, *args, **kwargs):
-        sys.stdout.flush()
-        sys.stderr.flush()
-        ppid = os.getpid()
-        try:
-            pid = os.fork()
-        except OSError:
-            print>>sys.stderr, 'judgepm: Failed to spawn judge:', id
-            return
-        if pid == 0:
-            # In child. Scary business.
-            self.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
-            if ppid != os.getppid():
-                os.kill(os.getpid(), signal.SIGTERM)
-                os._exit(2)
-            sys.stdin.close()
-
-            for sig, handler in self.orig_signal.iteritems():
-                signal.signal(sig, handler)
-
-            # How could we possibly return to top level?
-            try:
-                os._exit(func(*args, **kwargs) or 0)
-            finally:
-                os._exit(1)  # If that os._exit fails because ret is a truthy non-int, then this will ensure death.
-        return pid
-
-    def _judge_proc(self, id):
-        env['id'] = id
-        env['key'] = self.auth[id]
-        try:
-            return judge_proc(False)
-        except BaseException:
-            return 1
-        finally:
-            sys.stdout.flush()
-            sys.stderr.flush()
-            logging.shutdown()
-
-    def _spawn_judge(self, id):
-        pid = self._spawn_child(self._judge_proc, id)
-        self.pids[pid] = id
-
-    def _spawn_monitor(self):
-        def monitor_proc():
-            signal.signal(signal.SIGUSR2, signal.SIG_IGN)
-
-            self.monitor.start()
-            try:
-                self.monitor.join()
-            except KeyboardInterrupt:
-                self.monitor.stop()
-        self.monitor_pid = self._spawn_child(monitor_proc)
-
-    def _spawn_api(self):
-        from dmoj import judgeenv
-        from BaseHTTPServer import HTTPServer
-
-        master_pid = self.master_pid
-
-        class Handler(JudgeControlRequestHandler):
-            def update_problems(self):
-                os.kill(master_pid, signal.SIGUSR2)
-
-        server = HTTPServer(judgeenv.api_listen, Handler)
-
-        def api_proc():
-            signal.signal(signal.SIGUSR2, signal.SIG_IGN)
-            server.serve_forever()
-        self.api_pid = self._spawn_child(api_proc)
-
-    def _spawn_all(self):
-        from dmoj import judgeenv
-
-        for id in self.auth:
-            print>>sys.stderr, 'judgepm: Spawning judge:', id
-            self._spawn_judge(id)
-        if self.monitor.is_real:
-            print>>sys.stderr, 'judgepm: Spawning monitor'
-            self._spawn_monitor()
-        if judgeenv.api_listen is not None:
-            print>>sys.stderr, 'judgepm: Spawning API server'
-            self._spawn_api()
-
-    def _monitor(self):
-        while self._try_respawn or self.pids:
-            try:
-                pid, status = os.wait()
-            except (OSError, IOError) as e:
-                if e.errno == errno.EINTR:
-                    continue
-                raise
-            if not os.WIFSIGNALED(status) and not os.WIFEXITED(status):
-                continue
-            if pid in self.pids:
-                # A child just died.
-                judge = self.pids[pid]
-                del self.pids[pid]
-                if self._try_respawn:
-                    print>>sys.stderr, 'judgepm: Judge died, respawning: %s (0x%08X)' % (judge, status)
-                    self._spawn_judge(judge)
-                else:
-                    print>>sys.stderr, 'judgepm: Judge exited: %s (0x%08X)' % (judge, status)
-            elif pid == self.monitor_pid:
-                if self._try_respawn:
-                    print>>sys.stderr, 'judgepm: Monitor died, respawning (0x%08X)' % status
-                    self._spawn_monitor()
-                else:
-                    print>>sys.stderr, 'judgepm: Monitor exited: (0x%08X)' % status
-            elif pid == self.api_pid:
-                if self._try_respawn:
-                    print>>sys.stderr, 'judgepm: API server died, respawning (0x%08X)' % status
-                    self._spawn_api()
-                else:
-                    print>>sys.stderr, 'judgepm: API server exited: (0x%08X)' % status
-            else:
-                print>>sys.stderr, 'judgepm: I am not your father, %d (0x%08X)!' % (pid, status)
-
-    def run(self):
-        print>>sys.stderr, 'judgepm: Starting process manager: %d.' % os.getpid()
-
-        self._forward_signal(signal.SIGUSR2, respawn=True)
-        self._forward_signal(signal.SIGINT)
-        self._forward_signal(signal.SIGHUP)
-        self._forward_signal(signal.SIGQUIT)
-        self._forward_signal(signal.SIGTERM)
-
-        self._spawn_all()
-        try:
-            self._monitor()
-        except KeyboardInterrupt:
-            self._try_respawn = False
-            self.signal_all(signal.SIGINT)
-            self._monitor()
-        print>> sys.stderr, 'judgepm: Exited gracefully: %d.' % os.getpid()
-
-    def signal_all(self, signum):
-        for pid in chain(self.pids, [self.monitor_pid, self.api_pid]):
-            if pid is None:
-                continue
-            try:
-                os.kill(pid, signum)
-            except OSError as e:
-                if e.errno != errno.ESRCH:
-                    raise
-                # Well the monitor will catch on eventually if the process vanishes.
 
 
 def main():  # pragma: no cover
@@ -601,14 +446,7 @@ def main():  # pragma: no cover
         print ansi_style('#ansi[Warning: %s](yellow)' % warning)
     del judgeenv.startup_warnings
 
-    if os.name == 'posix' and 'judges' in env:
-        if env.pidfile:
-            with open(env.pidfile) as f:
-                f.write(str(os.getpid()))
-        manager = JudgeManager(env.judges)
-        manager.run()
-    else:
-        return judge_proc(need_monitor=True)
+    judge_proc()
 
 if __name__ == '__main__':
     main()
