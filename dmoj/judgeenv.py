@@ -8,7 +8,23 @@ from dmoj.config import ConfigNode
 problem_dirs = ()
 env = ConfigNode(defaults={
     'selftest_sandboxing': True,
-    'runtime': {'g++11': 'g++'},
+    'runtime': {
+	'as_x64': '/usr/bin/x86_64-linux-gnu-as',
+  	'as_x86': '/usr/bin/as',
+  	'awk': '/usr/bin/mawk',
+  	'cat': '/bin/cat',
+  	'g++': '/usr/bin/g++',
+  	'g++11': '/usr/bin/g++-5',
+  	'g++14': '/usr/bin/g++-5',
+  	'gcc': '/usr/bin/gcc',
+  	'java8': '/usr/lib/jvm/java-8-openjdk-amd64/bin/java',
+  	'javac8': '/usr/lib/jvm/java-8-openjdk-amd64/bin/javac',
+  	'ld_x64': '/usr/bin/x86_64-linux-gnu-ld',
+  	'ld_x86': '/usr/bin/ld',
+  	'perl': '/usr/bin/perl',
+  	'python': '/usr/bin/python2.7',
+  	'python3': '/usr/bin/python3.5'
+	}
 }, dynamic=False)
 _root = os.path.dirname(__file__)
 fs_encoding = os.environ.get('DMOJ_ENCODING', sys.getfilesystemencoding())

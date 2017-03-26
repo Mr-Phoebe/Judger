@@ -72,7 +72,7 @@ class ProblemDataManager(dict):
         self.archive = None
         self.data = {}
 
-        print problem_data
+        print "initial problem_data: ", problem_data
         try:
             for f in problem_data:
                 i = f['in']

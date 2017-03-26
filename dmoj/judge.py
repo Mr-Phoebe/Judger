@@ -133,12 +133,14 @@ class Judge(object):
         grader_class = graders.StandardGrader
 
         print "before grader"
-        grader = self.get_grader_from_source(grader_class, problem, language, source)
-        # binary = grader.binary if grader else None
+        try:
+            grader = self.get_grader_from_source(grader_class, problem, language, source)
+        except Exception as ex:
+            print "error: ", ex
+        binary = grader.binary if grader else None
 
         print "compile end"
         # the compiler may have failed, or an error could have happened while initializing a custom judge
-        binary = grader.binary
        
         if binary:
             print "compile success"
@@ -268,7 +270,7 @@ class Judge(object):
         # ...we don't want to see the raw ANSI codes from GCC/Clang on the site.
         # We could use format_ansi and send HTML to the site, but the site doesn't presently support HTML
         # internal error formatting.
-        self.packet_manager.internal_error_packet(strip_ansi(message))
+        self.packet_manager.internal_error_packet(strip_ansi(message), self.current_submission)
 
         # Logs can contain ANSI, and it'll display fine
         print >> sys.stderr, message
@@ -286,24 +288,22 @@ class Judge(object):
 
     def start_judge(self, message):
 
-        #try:
-        params = json.loads(message.body)
-        self.current_submission = int(params['submission_id'])
-        problem_id = int(params['problem_id'])
-        language = params['language']
-        source = params['source']
-        time_limit = int(params['time_limit'])
-        memory_limit = int(params['memory_limit'])
-        problem_data = params['problem_data']
-        pretests_only=False
-        self.begin_grading(problem_id, language, source, time_limit, \
-                memory_limit, problem_data)
-        #except Exception as ex:
-        #    print "error: ", ex
+        try:
+            params = json.loads(message.body)
+            self.current_submission = int(params['submission_id'])
+            problem_id = int(params['problem_id'])
+            language = params['language']
+            source = params['source']
+            time_limit = int(params['time_limit'])
+            memory_limit = int(params['memory_limit'])
+            problem_data = params['problem_data']
+            pretests_only=False
+            self.begin_grading(problem_id, language, source, time_limit, \
+                    memory_limit, problem_data)
+        except Exception as ex:
+            print "error: ", ex
 
         return True
-
-
 
 
     def listen(self):
@@ -418,6 +418,7 @@ def main():  # pragma: no cover
             pass
 
     executors.load_executors()
+    print executors.executors
 
     print 'Running live judge...'
 

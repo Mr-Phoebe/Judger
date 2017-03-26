@@ -31,6 +31,12 @@ class PacketManager(object):
         self.url = url
         # Exponential backoff: starting at 4 seconds.
         # Certainly hope it won't stack overflow, since it will take days if not years.
+	self.headers = { "Accept":"text/html,application/xhtml+xml,application/xml;",
+            "Accept-Encoding":"gzip",
+            "Accept-Language":"zh-CN,zh;q=0.8",
+            "Referer":"http://www.example.com/",
+            }
+
 
     def _send_packet(self, packet):
 
