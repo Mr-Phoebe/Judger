@@ -36,7 +36,7 @@ class PacketManager(object):
 
         try:
             packet['key'] = self.key
-            resp = request.post(self.url, data=json.dumps(packet)) 
+            resp = requests.post(self.url, data=json.dumps(packet)) 
             res = resp.json()
             res['code'] = 0
             return res
@@ -72,17 +72,14 @@ class PacketManager(object):
         self._send_packet({'name': 'supported-problems',
                            'problems': problems})
 
-    def test_case_status_packet(self, position, result, current_submission):
+    def test_case_status_packet(self, result, current_submission):
         self._send_packet({'name': 'test-case-status',
                            'submission-id': current_submission,
-                           'position': position,
+                           'position': result.case.position,
                            'status': result.result_flag,
                            'time': result.execution_time,
-                           'points': result.points,
-                           'total-points': result.total_points,
                            'memory': result.max_memory,
-                           'output': result.output,
-                           'feedback': result.feedback})
+                           'output': result.output})
 
     def compile_error_packet(self, log, current_submission):
         self.fallback = 4
@@ -102,11 +99,10 @@ class PacketManager(object):
                            'submission-id': current_submission,
                            'message': message})
 
-    def begin_grading_packet(self, is_pretested, current_submission):
+    def begin_grading_packet(self, current_submission):
         logger.info('Begin grading: %d', current_submission)
         self._send_packet({'name': 'grading-begin',
-                           'submission-id': current_submission,
-                           'pretested': is_pretested})
+                           'submission-id': current_submission})
 
     def grading_end_packet(self, current_submission):
         logger.info('End grading: %d', current_submission)

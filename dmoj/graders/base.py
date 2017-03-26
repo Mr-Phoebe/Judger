@@ -6,7 +6,9 @@ class BaseGrader(object):
         self.language = language
         self.problem = problem
         self.judge = judge
+        print "gen binary"
         self.binary = self._generate_binary()
+        print "get binary"
         self._terminate_grading = False
         self._current_proc = None
 

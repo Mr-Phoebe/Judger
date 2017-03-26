@@ -28,7 +28,6 @@ class Result(object):
         self.proc_output = ''
         self.feedback = ''
         self.case = case
-        self.points = 0
 
     def get_main_code(self):
         for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RTE', 'IR', 'WA', 'SC']:

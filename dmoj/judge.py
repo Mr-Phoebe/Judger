@@ -130,30 +130,29 @@ class Judge(object):
         except Exception:
             return self.internal_error()
 
-        # grader_class = graders.StandardGrader
+        grader_class = graders.StandardGrader
 
-        # grader = self.get_grader_from_source(grader_class, problem, language, source)
+        print "before grader"
+        grader = self.get_grader_from_source(grader_class, problem, language, source)
         # binary = grader.binary if grader else None
 
+        print "compile end"
         # the compiler may have failed, or an error could have happened while initializing a custom judge
-        # either way, we can't continue
-        print "before process"
-        try:
-            process = self.get_process_from_source(problem, language, source) 
-            print process.__dict__
-        except Exception as ex:
-            print "error :", ex
-        return
+        binary = grader.binary
+       
         if binary:
-            self.packet_manager.begin_grading_packet(problem.is_pretested, submission_id)
+            print "compile success"
+            self.packet_manager.begin_grading_packet(submission_id)
 
             batch_counter = 1
             in_batch = False
 
             # cases are indexed at 1
             case_number = 1
+            print "start judge data"
             try:
-                for result in self.grade_cases(grader, problem.cases, short_circuit=short_circuit):
+                for result in self.grade_cases(grader, problem.cases):
+                    print 'result: ', type(result)
                     if isinstance(result, BatchBegin):
                         self.packet_manager.batch_begin_packet(submission_id)
                         print ansi_style("#ansi[Batch #%d](yellow|bold)" % batch_counter)
@@ -178,14 +177,18 @@ class Judge(object):
                         print ansi_style('%sTest case %2d %-3s %s' % (case_padding, case_number,
                                                                       colored_codes[0], case_info))
 
-                        self.packet_manager.test_case_status_packet(case_number, result)
+
+                        self.packet_manager.test_case_status_packet(result,
+                                submission_id)
 
                         case_number += 1
             except TerminateGrading:
+                print "xxx"
                 self.packet_manager.submission_terminated_packet()
                 print ansi_style('#ansi[Forcefully terminating grading. Temporary files may not be deleted.](red|bold)')
                 pass
-            except:
+            except Exception as ex:
+                print "xxx: ", ex
                 self.internal_error()
             else:
                 self.packet_manager.grading_end_packet()
@@ -196,25 +199,9 @@ class Judge(object):
         self.current_submission = None
         self.current_grader = None
 
-    def grade_cases(self, grader, cases, short_circuit=False, is_short_circuiting=False):
+    def grade_cases(self, grader, cases):
         for case in cases:
             # Yield notifying objects for batch begin/end, and unwrap all cases inside the batches
-            if isinstance(case, BatchedTestCase):
-                yield BatchBegin()
-                for batched_case in self.grade_cases(grader, case.batched_cases, short_circuit=True,
-                                          is_short_circuiting=is_short_circuiting):
-                    if (batched_case.result_flag & Result.WA) > 0 and not case.points:
-                        is_short_circuiting = True
-                    yield batched_case
-                yield BatchEnd()
-                continue
-
-            # Stop grading if we're short circuiting
-            if is_short_circuiting:
-                result = Result(case)
-                result.result_flag = Result.SC
-                yield result
-                continue
 
             # Must check here because we might be interrupted mid-execution
             # If we don't bail out, we get an IR.
@@ -227,16 +214,14 @@ class Judge(object):
             # If the WA bit of result_flag is set and we are set to short-circuit (e.g., in a batch),
             # short circuit the rest of the cases.
             # Do the same if the case is a pretest (i.e. has 0 points)
-            if (result.result_flag & Result.WA) > 0 and (short_circuit or not case.points):
-                is_short_circuiting = True
 
             yield result
 
     def get_grader_from_source(self, grader_class, problem, language, source):
         if isinstance(source, unicode):
             source = source.encode('utf-8')
-
         try:
+            print "init grade"
             grader = grader_class(self, problem, language, source)
         except CompileError as ce:
             print ansi_style('#ansi[Failed compiling submission!](red|bold)')
@@ -252,10 +237,12 @@ class Judge(object):
         if isinstance(source, unicode):
             source = source.encode('utf-8')
         print executors.keys()
-
-        executor = executors[language].Executor('validator', source)
-        print "got executor"
-        return executor.launch(time=problem.time_limit, memory=problem.memory_limit)
+        try:
+            exe = executors[language].Executor('validator', source)
+            print "got executor"
+            return exe.launch(time=problem.time_limit, memory=problem.memory_limit)
+        except Exception as ex:
+            print "exe:", ex
 
        
 
@@ -301,21 +288,13 @@ class Judge(object):
 
         #try:
         params = json.loads(message.body)
-        print params
         self.current_submission = int(params['submission_id'])
-        print "before start"
         problem_id = int(params['problem_id'])
-        print problem_id
         language = params['language']
-        print language
         source = params['source']
-        print source
         time_limit = int(params['time_limit'])
-        print time_limit
         memory_limit = int(params['memory_limit'])
-        print memory_limit
         problem_data = params['problem_data']
-        print problem_data
         pretests_only=False
         self.begin_grading(problem_id, language, source, time_limit, \
                 memory_limit, problem_data)

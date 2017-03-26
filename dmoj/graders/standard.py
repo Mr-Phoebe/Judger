@@ -25,8 +25,7 @@ class StandardGrader(BaseGrader):
         input = case.input_data()  # cache generator data
 
         self._current_proc = self.binary.launch(time=self.problem.time_limit, memory=self.problem.memory_limit,
-                                                pipe_stderr=True, unbuffered=case.config.unbuffered,
-                                                io_redirects=case.io_redirects())
+                                                pipe_stderr=True)
 
         error = self._interact_with_process(case, result, input)
 
@@ -43,14 +42,11 @@ class StandardGrader(BaseGrader):
 
         # checkers must either return a boolean (True: full points, False: 0 points)
         # or a CheckerResult, so convert to CheckerResult if it returned bool
-        if not isinstance(check, CheckerResult):
-            check = CheckerResult(check, case.points if check else 0.0)
 
-        result.result_flag |= [Result.WA, Result.AC][check.passed]
-        result.points = check.points
+        result.result_flag |= [Result.WA, Result.AC][check]
 
-        self.update_feedback(check, error, process, result)
-        case.free_data()
+        # self.update_feedback(check, error, process, result)
+        # case.free_data()
 
         # Where CPython has reference counting and a GC, PyPy only has a GC. This means that while CPython
         # will have freed any (usually massive) generated data from the line above by reference counting, it might
@@ -59,8 +55,6 @@ class StandardGrader(BaseGrader):
         #
         # We don't really have a way to force the generated data to disappear, so calling a gc here is the best
         # chance we have.
-        if platform.python_implementation() == 'PyPy':
-            gc.collect()
 
         return result
 
@@ -90,21 +84,12 @@ class StandardGrader(BaseGrader):
         # We shouldn't run checkers if the submission is already known to be incorrect, because some checkers
         # might be very computationally expensive.
         # See https://github.com/DMOJ/judge/issues/170
-        if not result.result_flag:
             # Checkers might crash if any data is None, so force at least empty string
-            check = case.checker()(result.proc_output or '',
-                                   case.output_data() or '',
-                                   submission_source=self.source,
-                                   judge_input=case.input_data() or '',
-                                   point_value=case.points,
-                                   case_position=case.position,
-                                   batch=case.batch,
-                                   submission_language=self.language)
-        else:
-            # Solution is guaranteed to receive 0 points
-            check = False
+            # standard judge, wait for sp update
+        from dmoj.checkers import standard
+        return standard.check(result.proc_output or '', case.output_data() or '')
+                                   
 
-        return check
 
     def set_result_flag(self, process, result):
         if process.returncode > 0:
@@ -132,7 +117,7 @@ class StandardGrader(BaseGrader):
     def _interact_with_process(self, case, result, input):
         process = self._current_proc
         try:
-            result.proc_output, error = process.safe_communicate(input, outlimit=case.config.output_limit_length,
+            result.proc_output, error = process.safe_communicate(input, outlimit=100000,
                                                                  errlimit=1048576)
         except OutputLimitExceeded as ole:
             stream, result.proc_output, error = ole.args
@@ -152,10 +137,13 @@ class StandardGrader(BaseGrader):
         from dmoj.utils import ansi
 
         # If the executor requires compilation, compile and send any errors/warnings to the site
+        print "exe binary"
+        print self.language, self.problem.id
+        print self.source
         try:
             # Fetch an appropriate executor for the language
-            binary = executors[self.language].Executor(self.problem.id, self.source,
-                                                       hints=self.problem.config or [])
+            binary = executors[self.language].Executor(str(self.problem.id), self.source)
+            print "get binary"
         except CompileError as compilation_error:
             error = compilation_error.args[0]
             error = error.decode('mbcs') if os.name == 'nt' and isinstance(error, str) else error
@@ -163,6 +151,8 @@ class StandardGrader(BaseGrader):
 
             # Compile error is fatal
             raise
+        except Exception as ex:
+            print "error: ", ex
 
         # Carry on grading in case of compile warning
         if hasattr(binary, 'warning') and binary.warning:

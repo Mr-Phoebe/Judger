@@ -8,7 +8,7 @@ from dmoj.config import ConfigNode
 problem_dirs = ()
 env = ConfigNode(defaults={
     'selftest_sandboxing': True,
-    'runtime': {},
+    'runtime': {'g++11': 'g++'},
 }, dynamic=False)
 _root = os.path.dirname(__file__)
 fs_encoding = os.environ.get('DMOJ_ENCODING', sys.getfilesystemencoding())
@@ -36,7 +36,7 @@ def load_env(cli=False):  # pragma: no cover
     if not cli:
         _parser.add_argument('judge_key', nargs='?', help='judge key (overrides configuration)')
 
-        _parser.add_argument('-u', '--server-url', default='127.0.0.1:8080',
+        _parser.add_argument('-u', '--server-url', default='127.0.0.1:80',
                              help='Server Host address to listen for judge API')
         _parser.add_argument('-p', '--problem-dir', default=os.path.join(BASE_DIR, 'problemdata'))
         _parser.add_argument('-n', '--nsq-url', default='127.0.0.1:4150')
@@ -61,8 +61,8 @@ def load_env(cli=False):  # pragma: no cover
     if not os.path.exists(problem_data_dir):
         os.mkdir(problem_data_dir)
 
-    from dmoj import executors
-    executors.load_executors()
+    from dmoj.executors import executors, CPP11
+    executors['CPP11'] = CPP11
 
     # log_file = getattr(_args, 'log_file', None)
 

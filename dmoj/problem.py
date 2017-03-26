@@ -16,25 +16,23 @@ import requests
 
 
 class Problem(object):
-    def __init__(self, problem_id, time_limit, memory_limit, problem_data):
+    def __init__(self, problem_id, time_limit, memory_limit, _problem_data):
         self.id = problem_id
         self.time_limit = time_limit
         self.memory_limit = memory_limit
         self.generator_manager = GeneratorManager()
 
-        self.problem_data = ProblemDataManager(problem_id, problem_data)
+        self.problem_data = ProblemDataManager(problem_id, _problem_data)
 
         # Checkers modules must be stored in a dict, for the duration of execution,
         # lest globals be deleted with the module.
-        self._checkers = {}
-        self._testcase_counter = 0
-        self._batch_counter = 0
-        self.config = None
+        
+        self.config = _problem_data
 
         # self.problem_data.archive = self._resolve_archive_files()
 
         # self.is_pretested = load_pretests_only and 'pretest_test_cases' in self.config
-        # self.cases = self._resolve_testcases(self.config['pretest_test_cases' if self.is_pretested else 'test_cases'])
+        self.cases = self._resolve_testcases(_problem_data)
 
     def load_checker(self, name):
         if name in self._checkers:
@@ -54,15 +52,15 @@ class Problem(object):
             return archive
         return None
 
-    def _resolve_testcases(self, cfg, batch_no=0):
+    def _resolve_testcases(self, cfg):
         cases = []
         for case_config in cfg:
-            if 'batched' in case_config.raw_config:
-                self._batch_counter += 1
-                cases.append(BatchedTestCase(self._batch_counter, case_config, self))
-            else:
-                cases.append(TestCase(self._testcase_counter, batch_no, case_config, self))
-                self._testcase_counter += 1
+            conf = {
+                    'in': case_config['in']['filename'],
+                    'out': case_config['out']['filename'],
+                    'position': case_config['position'],
+                    }
+            cases.append(TestCase(conf, self))
         return cases
 
 
@@ -129,119 +127,25 @@ class BatchedTestCase(object):
 
 
 class TestCase(object):
-    def __init__(self, count, batch_no, config, problem):
-        self.position = count
-        self.batch = batch_no
+    def __init__(self, config, problem):
+        self.position = config['position']
         self.config = config
         self.problem = problem
-        self.points = config.points
-        self.output_prefix_length = config.output_prefix_length
-        self._generated = None
-
-    def io_redirects(self):
-        redirects = self.config.io_redirects
-        if not redirects:
-            return None
-
-        # io_redirects:
-        #   DATA01.in:
-        #     fd: 0
-        #     mode: "r"
-        #   DATA01.out:
-        #     fd: 1
-        #     mode: "w"
-
-        filtered_data = {}
-
-        for redirect in redirects:
-            mapping = redirects[redirect]
-            if 'fd' not in mapping:
-                raise InvalidInitException("no fd specified for redirect '%s'" % redirect)
-            if 'mode' not in mapping:
-                raise InvalidInitException("no mode specified for redirect '%s'" % redirect)
-            if mapping.mode not in 'rw':
-                raise InvalidInitException("invalid mode for redirect '%s': valid options are 'r', 'w'" % redirect)
-            if isinstance(mapping.fd, str):
-                mapped = {'stdin': 0, 'stdout': 1, 'stderr': 2}.get(mapping.fd, None)
-                if mapped is None:
-                    raise InvalidInitException("unknown named fd for redirect '%s'" % redirect)
-                mapping.fd = mapped
-
-            filtered_data[redirect] = (mapping.mode, mapping.fd)
-
-        return filtered_data
+        self.output_prefix_length = 100
 
     def _normalize(self, data):
         # Normalize all newline formats (\r\n, \r, \n) to \n, otherwise we have problems with people creating
         # data on Macs (\r newline) when judged programs assume \n
         return data.replace('\r\n', '\r').replace('\r', '\n')
 
-    def _run_generator(self, gen, args=None):
-        flags = []
-        args = args or []
-        if isinstance(gen, str):
-            filename = os.path.join(get_problem_root(self.problem.id), gen)
-        else:
-            filename = gen.source
-            if gen.flags:
-                flags += gen.flags
-            if not args and gen.args:
-                args += gen.args
-
-        executor = self.problem.generator_manager.get_generator(filename, flags)
-        # convert all args to str before launching; allows for smoother int passing
-        proc = executor.launch_unsafe(*map(str, args), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE)
-
-        try:
-            input = self.problem.problem_data[self.config['in']] if self.config['in'] else None
-        except KeyError:
-            input = None
-        self._generated = map(self._normalize, proc.communicate(input))
-
     def input_data(self):
-        gen = self.config.generator
-        if gen:
-            if self._generated is None:
-                self._run_generator(gen, args=self.config.generator_args)
-            if self._generated[0]:
-                return self._generated[0]
         # in file is optional
         return self._normalize(self.problem.problem_data[self.config['in']]) if self.config['in'] else ''
 
     def output_data(self):
-        if self.config.out:
-            return self._normalize(self.problem.problem_data[self.config.out])
-        gen = self.config.generator
-        if gen:
-            if self._generated is None:
-                self._run_generator(gen, args=self.config.generator_args)
-            return self._generated[1]
-
-    def checker(self):
-        try:
-            name = self.config['checker'] or 'standard'
-            if isinstance(name, ConfigNode):
-                params = name['args'] or {}
-                name = name['name']
-            else:
-                params = {}
-            if '.' in name:
-                try:
-                    checker = self.problem.load_checker(name)
-                except IOError:
-                    raise InvalidInitException('checker module path does not exist: %s' % name)
-            else:
-                checker = getattr(checkers, name)
-        except AttributeError as e:
-            raise InvalidInitException('error loading checker: ' + e.message)
-        if not hasattr(checker, 'check') or not callable(checker.check):
-            raise InvalidInitException('malformed checker: no check method found')
-
-        return partial(checker.check, **params)
-
-    def free_data(self):
-        self._generated = None
+        # if self.config[out]:
+        return self._normalize(self.problem.problem_data[self.config['out']])
 
     def __str__(self):
-        return 'TestCase{in=%s,out=%s,points=%s}' % (self.config['in'], self.config['out'], self.config['points'])
+        return 'TestCase{in=%s,out=%s}' % (self.config['in'], self.config['out'])
+

@@ -57,6 +57,7 @@ class BaseExecutor(PlatformExecutorMixin, ResourceProxy):
 
     @classmethod
     def get_command(cls):
+        print "cls.command: ", cls.command
         return cls.runtime_dict.get(cls.command)
 
     @classmethod
@@ -282,7 +283,9 @@ class CompiledExecutor(BaseExecutor):
         super(CompiledExecutor, self).__init__(problem_id, source_code, **kwargs)
         self.create_files(problem_id, source_code, *args, **kwargs)
         self.warning = None
+        print "start compile"
         self._executable = self.compile()
+        print "end compile"
 
     def create_files(self, problem_id, source_code, *args, **kwargs):
         self._code = self._file(problem_id + self.ext)
@@ -330,7 +333,9 @@ class CompiledExecutor(BaseExecutor):
         raise CompileError(output)
 
     def compile(self):
+        print "gen process"
         process = self.get_compile_process()
+        print "gen output"
         output = self.get_compile_output(process)
 
         if self.is_failed_compile(process):
