@@ -9,22 +9,7 @@ problem_dirs = ()
 env = ConfigNode(defaults={
     'selftest_sandboxing': True,
     'runtime': {
-	'as_x64': '/usr/bin/x86_64-linux-gnu-as',
-  	'as_x86': '/usr/bin/as',
-  	'awk': '/usr/bin/mawk',
-  	'cat': '/bin/cat',
-  	'g++': '/usr/bin/g++',
-  	'g++11': '/usr/bin/g++-5',
-  	'g++14': '/usr/bin/g++-5',
-  	'gcc': '/usr/bin/gcc',
-  	'java8': '/usr/lib/jvm/java-8-openjdk-amd64/bin/java',
-  	'javac8': '/usr/lib/jvm/java-8-openjdk-amd64/bin/javac',
-  	'ld_x64': '/usr/bin/x86_64-linux-gnu-ld',
-  	'ld_x86': '/usr/bin/ld',
-  	'perl': '/usr/bin/perl',
-  	'python': '/usr/bin/python2.7',
-  	'python3': '/usr/bin/python3.5'
-	}
+    }
 }, dynamic=False)
 _root = os.path.dirname(__file__)
 fs_encoding = os.environ.get('DMOJ_ENCODING', sys.getfilesystemencoding())
@@ -57,6 +42,8 @@ def load_env(cli=False):  # pragma: no cover
         _parser.add_argument('-p', '--problem-dir', default=os.path.join(BASE_DIR, 'problemdata'))
         _parser.add_argument('-n', '--nsq-url', default='127.0.0.1:4150')
 
+    _parser.add_argument('-c', '--config', type=str, default=None, required=True,
+                         help='file to load judge configurations from')
 
     _args = _parser.parse_args()
 
@@ -77,8 +64,10 @@ def load_env(cli=False):  # pragma: no cover
     if not os.path.exists(problem_data_dir):
         os.mkdir(problem_data_dir)
 
-    from dmoj.executors import executors, CPP11
-    executors['CPP11'] = CPP11
+    model_file = _args.config
+
+    with open(model_file) as init_file:
+        env.update(yaml.safe_load(init_file))
 
     # log_file = getattr(_args, 'log_file', None)
 
