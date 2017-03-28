@@ -92,7 +92,8 @@ class ProblemDataManager(dict):
                 self.data[key] = fp.read()
         else:
             url = env['server_url'] + f['path']
-            print 'url: ', url
+            print 'url: ', url[0]
+            url = url.strip().strip('\n')
             content = requests.get(url).content
             with open(key, 'wb') as fp:
                 fp.write(content)

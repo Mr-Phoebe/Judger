@@ -1,0 +1,93 @@
+Auto-configuring [4mADA[0m:    [1m[31mFailed to find "gnatmake"[0m
+Auto-configuring [4mAWK[0m:    [1m[32mUsing /usr/bin/mawk[0m
+Auto-configuring [4mBASH[0m:   [1m[31mFailed self-test[0m
+  Attempted:
+    bash: /bin/bash
+  Errors:
+    Got unexpected stdout output:
+    
+Auto-configuring [4mBF[0m:     [1m[32mUsing /usr/bin/gcc[0m
+Auto-configuring [4mC[0m:      [1m[32mUsing /usr/bin/gcc[0m
+Auto-configuring [4mCBL[0m:    [1m[31mFailed to find "cobc"[0m
+Auto-configuring [4mCCL[0m:    [1m[31mFailed to find "ccl"[0m
+Auto-configuring [4mCLANG[0m:  [1m[31mFailed to find "clang"[0m
+Auto-configuring [4mCLANGX[0m: [1m[31mFailed to find "clang++"[0m
+Auto-configuring [4mCOFFEE[0m: [1m[31mFailed to find "node"[0m
+Auto-configuring [4mCPP03[0m:  [1m[32mUsing /usr/bin/g++[0m
+Auto-configuring [4mCPP11[0m:  [1m[32mUsing /usr/bin/g++-5[0m
+Auto-configuring [4mCPP14[0m:  [1m[32mUsing /usr/bin/g++-5[0m
+Auto-configuring [4mD[0m:      [1m[31mFailed to find "dmd"[0m
+Auto-configuring [4mDART[0m:   [1m[31mFailed to find "dart"[0m
+Auto-configuring [4mF95[0m:    [1m[31mFailed to find "gfortran"[0m
+Auto-configuring [4mFORTH[0m:  [1m[31mFailed to find "gforth"[0m
+Auto-configuring [4mGAS32[0m:  [1m[32mSuccess[0m
+Auto-configuring [4mGAS64[0m:  [1m[32mSuccess[0m
+Auto-configuring [4mGASARM[0m: [1m[31mUnable to natively debug[0m
+Auto-configuring [4mGO[0m:     [1m[31mFailed to find "go"[0m
+Auto-configuring [4mGROOVY[0m: [1m[31mFailed to find "groovy"[0m
+Auto-configuring [4mHASK[0m:   [1m[31mFailed to find "ghc"[0m
+Auto-configuring [4mICK[0m:    [1m[31mFailed to find "ick"[0m
+Auto-configuring [4mJAVA7[0m:  [1m[31mCould not find JVM[0m
+Auto-configuring [4mJAVA8[0m:  [1m[32mUsing /usr/lib/jvm/java-8-openjdk-amd64/bin/java[0m
+Auto-configuring [4mJAVA9[0m:  [1m[31mCould not find JVM[0m
+Auto-configuring [4mKOTLIN[0m: [1m[31mUnimplemented[0m
+Auto-configuring [4mLUA[0m:    [1m[31mFailed to find "lua"[0m
+Auto-configuring [4mMONOCS[0m: [1m[31mFailed to find "mono"[0m
+Auto-configuring [4mMONOFS[0m: [1m[31mFailed to find "mono"[0m
+Auto-configuring [4mMONOVB[0m: [1m[31mFailed to find "mono"[0m
+Auto-configuring [4mNASM[0m:   [1m[31mFailed to find "nasm"[0m
+  Attempted:
+    ld_x86: /usr/bin/ld
+Auto-configuring [4mNASM64[0m: [1m[31mFailed to find "nasm"[0m
+  Attempted:
+    ld_x64: /usr/bin/x86_64-linux-gnu-ld
+Auto-configuring [4mNIM[0m:    [1m[31mFailed to find "nim"[0m
+Auto-configuring [4mOBJC[0m:   [1m[31mFailed to find "gobjc"[0m
+Auto-configuring [4mOCAML[0m:  [1m[31mFailed to find "ocaml"[0m
+Auto-configuring [4mOCTAVE[0m: [1m[31mFailed to find "octave"[0m
+Auto-configuring [4mPAS[0m:    [1m[31mFailed to find "fpc"[0m
+Auto-configuring [4mPERL[0m:   [1m[32mUsing /usr/bin/perl[0m
+Auto-configuring [4mPHP[0m:    [1m[31mFailed to find "php"[0m
+Auto-configuring [4mPHP7[0m:   [1m[31mFailed to find "php7"[0m
+Auto-configuring [4mPIKE[0m:   [1m[31mFailed to find "pike"[0m
+Auto-configuring [4mPRO[0m:    [1m[31mFailed to find "swipl"[0m
+Auto-configuring [4mPY2[0m:    [1m[32mUsing /usr/bin/python2.7[0m
+Auto-configuring [4mPY3[0m:    [1m[32mUsing /usr/bin/python3.5[0m
+Auto-configuring [4mPYPY[0m:   [1m[31mFailed to find "pypy"[0m
+Auto-configuring [4mPYPY3[0m:  [1m[31mFailed to find "pypy3"[0m
+Auto-configuring [4mR[0m:      [1m[31mFailed to find "Rscript"[0m
+Auto-configuring [4mRKT[0m:    [1m[31mFailed to find "racket"[0m
+Auto-configuring [4mRUBY18[0m: [1m[31mFailed to find "ruby18"[0m
+Auto-configuring [4mRUBY19[0m: [1m[31mFailed to find "ruby19"[0m
+Auto-configuring [4mRUBY21[0m: [1m[31mFailed to find "ruby21"[0m
+Auto-configuring [4mRUST[0m:   [1m[31mFailed to find "cargo"[0m
+Auto-configuring [4mSBCL[0m:   [1m[31mFailed to find "sbcl"[0m
+Auto-configuring [4mSCALA[0m:  [1m[31mFailed to find "scalac"[0m
+Auto-configuring [4mSCM[0m:    [1m[31mFailed to find "chicken-csc"[0m
+Auto-configuring [4mSED[0m:    [1m[32mUsing /bin/sed[0m
+Auto-configuring [4mSWIFT[0m:  [1m[31mFailed to find "swiftc"[0m
+Auto-configuring [4mTCL[0m:    [1m[32mUsing /usr/bin/tclsh[0m
+Auto-configuring [4mTEXT[0m:   [1m[32mUsing /bin/cat[0m
+Auto-configuring [4mTUR[0m:    [1m[31mFailed to find "tprologc"[0m
+Auto-configuring [4mV8JS[0m:   [1m[31mFailed to find "v8dmoj"[0m
+Auto-configuring [4mVC[0m:     [1m[31mFailed to find "cl.exe"[0m
+
+[1m[32mConfiguration result[0m:
+runtime:
+  as_x64: /usr/bin/x86_64-linux-gnu-as
+  as_x86: /usr/bin/as
+  awk: /usr/bin/mawk
+  cat: /bin/cat
+  g++: /usr/bin/g++
+  g++11: /usr/bin/g++-5
+  g++14: /usr/bin/g++-5
+  gcc: /usr/bin/gcc
+  java8: /usr/lib/jvm/java-8-openjdk-amd64/bin/java
+  javac8: /usr/lib/jvm/java-8-openjdk-amd64/bin/javac
+  ld_x64: /usr/bin/x86_64-linux-gnu-ld
+  ld_x86: /usr/bin/ld
+  perl: /usr/bin/perl
+  python: /usr/bin/python2.7
+  python3: /usr/bin/python3.5
+  sed: /bin/sed
+  tclsh: /usr/bin/tclsh

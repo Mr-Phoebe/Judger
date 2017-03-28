@@ -52,7 +52,7 @@ def load_env(cli=False):  # pragma: no cover
     if not cli:
         _parser.add_argument('judge_key', nargs='?', help='judge key (overrides configuration)')
 
-        _parser.add_argument('-u', '--server-url', default='127.0.0.1:80',
+        _parser.add_argument('-u', '--server-url', default='http://127.0.0.1:80',
                              help='Server Host address to listen for judge API')
         _parser.add_argument('-p', '--problem-dir', default=os.path.join(BASE_DIR, 'problemdata'))
         _parser.add_argument('-n', '--nsq-url', default='127.0.0.1:4150')

@@ -43,8 +43,10 @@ class PacketManager(object):
         try:
             packet['key'] = self.key
             resp = requests.post(self.url, data=json.dumps(packet)) 
-            res = resp.json()
-            res['code'] = 0
+            print "receive resp"
+            print type(resp), resp
+            res = resp.content
+            print type(res), res
             return res
         except Exception as ex:
             print ex

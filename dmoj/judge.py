@@ -126,24 +126,20 @@ class Judge(object):
 
         try:
             problem = Problem(problem_id, time_limit, memory_limit, problem_data)
-            print "end problem"
         except Exception:
             return self.internal_error()
 
         grader_class = graders.StandardGrader
 
-        print "before grader"
         try:
             grader = self.get_grader_from_source(grader_class, problem, language, source)
         except Exception as ex:
             print "error: ", ex
         binary = grader.binary if grader else None
 
-        print "compile end"
         # the compiler may have failed, or an error could have happened while initializing a custom judge
        
         if binary:
-            print "compile success"
             self.packet_manager.begin_grading_packet(submission_id)
 
             batch_counter = 1
@@ -193,7 +189,7 @@ class Judge(object):
                 print "xxx: ", ex
                 self.internal_error()
             else:
-                self.packet_manager.grading_end_packet()
+                self.packet_manager.grading_end_packet(submission_id)
 
         print ansi_style('Done grading #ansi[%s](yellow)/#ansi[%s](green|bold).' % (problem_id, submission_id))
         self._terminate_grading = False
