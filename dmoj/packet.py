@@ -10,6 +10,7 @@ import traceback
 import zlib
 import nsq
 import requests
+from result import Result
 
 
 from dmoj import sysinfo
@@ -26,25 +27,22 @@ class JudgeAuthenticationFailed(Exception):
 class PacketManager(object):
     SIZE_PACK = struct.Struct('!I')
 
-    def __init__(self, url, key):
+    def __init__(self, url='http://127.0.0.1:4151/pub?topic=submission', key='bojv4'):
         self.key = key
         self.url = url
         # Exponential backoff: starting at 4 seconds.
         # Certainly hope it won't stack overflow, since it will take days if not years.
-	self.headers = { "Accept":"text/html,application/xhtml+xml,application/xml;",
-            "Accept-Encoding":"gzip",
-            "Accept-Language":"zh-CN,zh;q=0.8",
-            "Referer":"http://www.example.com/",
-            }
-
+        print "=================nsq-url==========================="
+        print self.url
 
     def _send_packet(self, packet):
 
         try:
             packet['key'] = self.key
-            resp = requests.post(self.url, data=json.dumps(packet)) 
+            print "================post to:", self.url, "============"
+            resp = requests.post(self.url.strip(), data=json.dumps(packet)) 
             print "receive resp"
-            print type(resp), resp
+            print type(json.dumps(packet))
             res = resp.content
             print type(res), res
             return res
@@ -59,72 +57,47 @@ class PacketManager(object):
                            'id': id,
                            'key': key})
 
-    def invocation_begin_packet(self, current_submission):
-        logger.info('Begin invoking: %d', current_submission)
-        self._send_packet({'name': 'invocation-begin',
-                           'invocation-id': current_submission})
-
-    def invocation_end_packet(self, result, current_submission):
-        # logger.info('End invoking: %d', self.judge.current_submission)
-        self.fallback = 4
-        self._send_packet({'name': 'invocation-end',
-                           'output': result.proc_output,
-                           'status': result.status_flag,
-                           'time': result.execution_time,
-                           'memory': result.max_memory,
-                           'feedback': result.feedback,
-                           'invocation-id': current_submission})
-
-    def supported_problems_packet(self, problems):
-        logger.info('Update problems')
-        self._send_packet({'name': 'supported-problems',
-                           'problems': problems})
-
     def test_case_status_packet(self, result, current_submission):
-        self._send_packet({'name': 'test-case-status',
-                           'submission-id': current_submission,
+        self._send_packet({'submission-id': current_submission,
                            'position': result.case.position,
-                           'status': result.result_flag,
+                           'status': result.get_result_name(),
                            'time': result.execution_time,
                            'memory': result.max_memory,
                            'output': result.output})
 
+    def compile_start_packet(self, id):
+        self._send_packet({'status': 'CL',
+                           'submission-id': id})
+
     def compile_error_packet(self, log, current_submission):
         self.fallback = 4
         self._send_packet({'name': 'compile-error',
+                           'status': 'CE',
                            'submission-id': current_submission,
                            'log': log})
 
     def compile_message_packet(self, log, current_submission):
         logger.info('Compile message: %d', current_submission)
-        self._send_packet({'name': 'compile-message',
+        self._send_packet({'status': 'JD',
                            'submission-id': current_submission,
-                           'log': log})
+                           'compile-message': log})
 
     def internal_error_packet(self, message, current_submission):
         logger.info('Internal error: %d', current_submission)
         self._send_packet({'name': 'internal-error',
+                           'status': 'SE',
                            'submission-id': current_submission,
                            'message': message})
 
     def begin_grading_packet(self, current_submission):
         logger.info('Begin grading: %d', current_submission)
-        self._send_packet({'name': 'grading-begin',
+        self._send_packet({'status': 'JD',
                            'submission-id': current_submission})
 
     def grading_end_packet(self, current_submission):
         logger.info('End grading: %d', current_submission)
         self.fallback = 4
         self._send_packet({'name': 'grading-end',
-                           'submission-id': current_submission})
-
-    def batch_begin_packet(self, current_submission):
-        self._batch += 1
-        self._send_packet({'name': 'batch-begin',
-                           'submission-id': current_submission})
-
-    def batch_end_packet(self, current_submission):
-        self._send_packet({'name': 'batch-end',
                            'submission-id': current_submission})
 
     def current_submission_packet(self, current_submission):
@@ -135,6 +108,7 @@ class PacketManager(object):
     def submission_terminated_packet(self, current_submission):
         logger.info('Submission aborted: %d', current_submission)
         self._send_packet({'name': 'submission-terminated',
+                           'status': 'SE',
                            'submission-id': current_submission})
 
     def ping_packet(self, when):
@@ -153,3 +127,6 @@ class PacketManager(object):
     def invocation_acknowledged_packet(self, sub_id):
         self._send_packet({'name': 'submission-acknowledged',
                            'invocation-id': sub_id})
+
+    def test_connect(self):
+        self._send_packet({'test':'hhhhhhhh'})

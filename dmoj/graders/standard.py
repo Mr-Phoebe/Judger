@@ -61,7 +61,7 @@ class StandardGrader(BaseGrader):
     def update_feedback(self, check, error, process, result):
         result.feedback = (check.feedback or (process.feedback if hasattr(process, 'feedback') else
                             getattr(self.binary, 'get_feedback', lambda x, y, z: '')(error, result, process)))
-        if not result.feedback and result.get_main_code() == Result.RTE:
+        if not result.feedback and result.get_main_code() == Result.RE:
             if hasattr(process, 'was_initialized') and not process.was_initialized:
                 # Process may failed to initialize, resulting in a SIGKILL without any prior signals.
                 # See <https://github.com/DMOJ/judge/issues/179> for more details.
@@ -97,11 +97,11 @@ class StandardGrader(BaseGrader):
         if process.returncode > 0:
             if os.name == 'nt' and process.returncode == 3:
                 # On Windows, abort() causes return value 3, instead of SIGABRT.
-                result.result_flag |= Result.RTE
+                result.result_flag |= Result.RE
                 process.signal = signal.SIGABRT
             elif os.name == 'nt' and process.returncode == 0xC0000005:
                 # On Windows, 0xC0000005 is access violation (SIGSEGV).
-                result.result_flag |= Result.RTE
+                result.result_flag |= Result.RE
                 process.signal = signal.SIGSEGV
             else:
                 # print>> sys.stderr, 'Exited with error: %d' % process.returncode
@@ -110,7 +110,7 @@ class StandardGrader(BaseGrader):
             # None < 0 == True
             # if process.returncode is not None:
             # print>> sys.stderr, 'Killed by signal %d' % -process.returncode
-            result.result_flag |= Result.RTE  # Killed by signal
+            result.result_flag |= Result.RE  # Killed by signal
         if process.tle:
             result.result_flag |= Result.TLE
         if process.mle:

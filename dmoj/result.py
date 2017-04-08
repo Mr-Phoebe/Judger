@@ -1,7 +1,7 @@
 class Result(object):
     AC = 0
     WA = 1 << 0
-    RTE = 1 << 1
+    RE = 1 << 1
     TLE = 1 << 2
     MLE = 1 << 3
     IR = 1 << 4
@@ -11,7 +11,7 @@ class Result(object):
     COLORS_BYID = {
         'AC': 'green',
         'WA': 'red',
-        'RTE': 'yellow',
+        'RE': 'yellow',
         'TLE': 'white',
         'MLE': 'yellow',
         'IR': 'yellow',
@@ -30,15 +30,22 @@ class Result(object):
         self.case = case
 
     def get_main_code(self):
-        for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RTE', 'IR', 'WA', 'SC']:
+        for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RE', 'IR', 'WA', 'SC']:
             code = getattr(Result, flag)
             if self.result_flag & code:
                 return code
         return Result.AC
+    
+    def get_result_name(self):
+        for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RE', 'IR', 'WA', 'SC']:
+            code = getattr(Result, flag)
+            if self.result_flag & code:
+                return flag
+        return 'AC'
 
     def readable_codes(self):
         execution_verdict = []
-        for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RTE', 'IR', 'WA', 'SC']:
+        for flag in ['IE', 'TLE', 'MLE', 'OLE', 'RE', 'IR', 'WA', 'SC']:
             if self.result_flag & getattr(Result, flag):
                 execution_verdict.append(flag)
         return execution_verdict or ['AC']

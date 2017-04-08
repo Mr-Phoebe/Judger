@@ -54,7 +54,7 @@ class Judge(object):
         self.current_submission = None
         self.current_grader = None
         self.current_submission_thread = None
-        self._terminate_grading = False
+        # self._terminate_grading = False
         self.process_type = 0
         self.packet_manager = packet.PacketManager(env['server_url'], env['key'])
         self.url = env['nsq_url']
@@ -69,57 +69,8 @@ class Judge(object):
         """
         self.packet_manager.supported_problems_packet(get_supported_problems())
 
-    def process_submission(self, type, target, id, *args, **kwargs):
-        try:
-            self.current_submission_thread.join()
-        except AttributeError:
-            pass
-        self.process_type = type
-        self.current_submission = id
-        self.current_submission_thread = threading.Thread(target=target, args=args)
-        self.current_submission_thread.daemon = True
-        self.current_submission_thread.start()
-        if kwargs.pop('blocking', False):
-            self.current_submission_thread.join()
-
-    def _custom_invocation(self, language, source, memory_limit, time_limit, input_data):
-        class InvocationGrader(graders.StandardGrader):
-            def check_result(self, case, result):
-                return not result.result_flag
-
-        class InvocationProblem(object):
-            id = 'CustomInvocation'
-            time_limit = time_limit
-            memory_limit = memory_limit
-
-        class InvocationCase(object):
-            config = ConfigNode({'unbuffered': False})
-            io_redirects = lambda: None
-            input_data = lambda: input_data
-
-        grader = self.get_grader_from_source(InvocationGrader, InvocationProblem(), language, source)
-        binary = grader.binary if grader else None
-
-        if binary:
-            self.packet_manager.invocation_begin_packet()
-            try:
-                result = grader.grade(InvocationCase())
-            except TerminateGrading:
-                self.packet_manager.submission_terminated_packet()
-                print ansi_style('#ansi[Forcefully terminating invocation.](red|bold)')
-                pass
-            except:
-                self.internal_error()
-            else:
-                self.packet_manager.invocation_end_packet(result)
-
-        print ansi_style('Done invoking #ansi[%s](green|bold).\n' % (id))
-        self._terminate_grading = False
-        self.current_submission_thread = None
-        self.current_submission = None
-
     def begin_grading(self, problem_id, language, source, time_limit, memory_limit,
-            problem_data):
+            problem_data, judge_type='ICPC'):
         submission_id = self.current_submission
         print ansi_style('Start grading #ansi[%s](yellow)/#ansi[%s](green|bold) in %s...'
                          % (problem_id, submission_id, language))
@@ -147,53 +98,35 @@ class Judge(object):
 
             # cases are indexed at 1
             case_number = 1
-            print "start judge data"
             try:
                 for result in self.grade_cases(grader, problem.cases):
-                    print 'result: ', type(result)
-                    if isinstance(result, BatchBegin):
-                        self.packet_manager.batch_begin_packet(submission_id)
-                        print ansi_style("#ansi[Batch #%d](yellow|bold)" % batch_counter)
-                        in_batch = True
-                    elif isinstance(result, BatchEnd):
-                        self.packet_manager.batch_end_packet(submission_id)
-                        batch_counter += 1
-                        in_batch = False
-                    else:
-                        codes = result.readable_codes()
-
-                        # here be cancer
-                        is_sc = (result.result_flag & Result.SC)
-                        colored_codes = map(lambda x: '#ansi[%s](%s|bold)' % ('--' if x == 'SC' else x,
-                                                                              Result.COLORS_BYID[x]), codes)
-                        colored_aux_codes = '{%s}' % ', '.join(colored_codes[1:]) if len(codes) > 1 else ''
-                        colored_feedback = '(#ansi[%s](|underline)) ' % result.feedback if result.feedback else ''
-                        case_info = '[%.3fs | %dkb] %s%s' % (result.execution_time, result.max_memory,
-                                                             colored_feedback,
-                                                             colored_aux_codes) if not is_sc else ''
-                        case_padding = '  ' * in_batch
-                        print ansi_style('%sTest case %2d %-3s %s' % (case_padding, case_number,
-                                                                      colored_codes[0], case_info))
-
-
-                        self.packet_manager.test_case_status_packet(result,
-                                submission_id)
-
-                        case_number += 1
+                    codes = result.readable_codes()
+                    # here be cancer
+                    is_sc = (result.result_flag & Result.SC)
+                    colored_codes = map(lambda x: '#ansi[%s](%s|bold)' % ('--' if x == 'SC' else x,
+                                                                          Result.COLORS_BYID[x]), codes)
+                    colored_aux_codes = '{%s}' % ', '.join(colored_codes[1:]) if len(codes) > 1 else ''
+                    colored_feedback = '(#ansi[%s](|underline)) ' % result.feedback if result.feedback else ''
+                    case_info = '[%.3fs | %dkb] %s%s' % (result.execution_time, result.max_memory,
+                                                         colored_feedback,
+                                                         colored_aux_codes) if not is_sc else ''
+                    case_padding = '  ' * in_batch
+                    print ansi_style('%sTest case %2d %-3s %s' % (case_padding, case_number,
+                                                                  colored_codes[0], case_info))
+                    self.packet_manager.test_case_status_packet(result, submission_id)
+                    if result.result_flag != Result.AC and judge_type == 'ICPC':
+                        break
+                    # self.packet_manager.test_case_status_packet(result, submission_id)
+                    case_number += 1
             except TerminateGrading:
-                print "xxx"
-                self.packet_manager.submission_terminated_packet()
+                self.packet_manager.submission_terminated_packet(submission_id)
                 print ansi_style('#ansi[Forcefully terminating grading. Temporary files may not be deleted.](red|bold)')
                 pass
             except Exception as ex:
-                print "xxx: ", ex
                 self.internal_error()
-            else:
-                self.packet_manager.grading_end_packet(submission_id)
 
         print ansi_style('Done grading #ansi[%s](yellow)/#ansi[%s](green|bold).' % (problem_id, submission_id))
-        self._terminate_grading = False
-        self.current_submission_thread = None
+        # self._terminate_grading = False
         self.current_submission = None
         self.current_grader = None
 
@@ -204,8 +137,8 @@ class Judge(object):
             # Must check here because we might be interrupted mid-execution
             # If we don't bail out, we get an IR.
             # In Java's case, all the code after this will crash.
-            if self._terminate_grading:
-                raise TerminateGrading()
+            #if self._terminate_grading:
+            #    raise TerminateGrading()
 
             result = grader.grade(case)
 
@@ -219,7 +152,6 @@ class Judge(object):
         if isinstance(source, unicode):
             source = source.encode('utf-8')
         try:
-            print "init grade"
             grader = grader_class(self, problem, language, source)
         except CompileError as ce:
             print ansi_style('#ansi[Failed compiling submission!](red|bold)')
@@ -230,19 +162,15 @@ class Judge(object):
 
         return grader
 
-    def get_process_from_source(self, problem, language, source):
-        print "start get executor"
+    @staticmethod
+    def get_process_from_source(problem, language, source):
         if isinstance(source, unicode):
             source = source.encode('utf-8')
-        print executors.keys()
         try:
             exe = executors[language].Executor('validator', source)
-            print "got executor"
             return exe.launch(time=problem.time_limit, memory=problem.memory_limit)
         except Exception as ex:
             print "exe:", ex
-
-       
 
     def get_process_type(self):
         return {0: None,
@@ -271,20 +199,19 @@ class Judge(object):
         # Logs can contain ANSI, and it'll display fine
         print >> sys.stderr, message
 
-    def terminate_grading(self):
-        """
-        Forcefully terminates the current submission. Not necessarily safe.
-        """
-        if self.current_submission_thread:
-            self._terminate_grading = True
-            if self.current_grader:
-                self.current_grader.terminate()
-            self.current_submission_thread.join()
-            self.current_submission_thread = None
+    # def terminate_grading(self):
+    #    """
+    #    Forcefully terminates the current submission. Not necessarily safe.
+    #    """
+    #    if self.current_submission_thread:
+    #        self._terminate_grading = True
+    #        if self.current_grader:
+    #            self.current_grader.terminate()
 
     def start_judge(self, message):
 
         try:
+            print message.body
             params = json.loads(message.body)
             self.current_submission = int(params['submission_id'])
             problem_id = int(params['problem_id'])
@@ -293,23 +220,24 @@ class Judge(object):
             time_limit = int(params['time_limit'])
             memory_limit = int(params['memory_limit'])
             problem_data = params['problem_data']
-            pretests_only=False
-            self.begin_grading(problem_id, language, source, time_limit, \
-                    memory_limit, problem_data)
+            judge_type = params.get('judge_type', 'ICPC')
+            self.begin_grading(problem_id, language, source, time_limit,\
+                               memory_limit, problem_data, judge_type)
         except Exception as ex:
             print "error: ", ex
+            self.packet_manager.internal_error_packet(str(ex), self.current_submission)
+        print "==================judge end================"
 
         return True
-
 
     def listen(self):
         """
         Attempts to connect to the handler server specified in command line.
         """
-        nsq.Reader(message_handler=self.start_judge, 
-            nsqd_tcp_addresses=[self.url],
-            topic='judge', channel=self.key, 
-            lookupd_poll_interval=15)
+        nsq.Reader(message_handler=self.start_judge,
+                   nsqd_tcp_addresses=[self.url],
+                   topic='judge', channel=self.key,
+                   lookupd_poll_interval=13)
         nsq.run()
 
 
@@ -326,7 +254,8 @@ class Judge(object):
         """
         End any submission currently executing, and exit the judge.
         """
-        self.terminate_grading()
+        pass
+        # self.terminate_grading()
 
 
 class ClassicJudge(Judge):
@@ -367,6 +296,7 @@ def sanity_check():
     except ImportError:
         startup_warnings.append('native checker module not found, compile _checker for optimal performance')
     return True
+
 
 def judge_proc():
     global g_judge
@@ -414,7 +344,6 @@ def main():  # pragma: no cover
             pass
 
     executors.load_executors()
-    print executors.executors
 
     print 'Running live judge...'
 
